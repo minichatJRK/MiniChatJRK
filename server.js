@@ -35,10 +35,24 @@ app.prepare().then(() => {
     });
 
     io.on("connection", (socket) => {
-        console.log("Client connected:", socket.id);
+        // User List Management
+        const onlineUsers = new Set();
+
+        // Helper to broadcast users
+        const broadcastUsers = () => {
+            const users = [];
+            io.sockets.sockets.forEach((s) => {
+                if (s.data.username) users.push(s.data.username);
+            });
+            // Remove duplicates if any
+            io.emit("update_users", [...new Set(users)]);
+        };
 
         socket.on("join", (username) => {
             socket.data.username = username;
+
+            // Broadcast new user list
+            broadcastUsers();
 
             // Send existing history to the new user
             socket.emit("load_history", messages);
@@ -90,6 +104,9 @@ app.prepare().then(() => {
                 if (messages.length > MAX_HISTORY) messages.shift();
 
                 io.emit("system_message", leaveMsg);
+
+                // Update user list
+                broadcastUsers();
             }
         });
     });

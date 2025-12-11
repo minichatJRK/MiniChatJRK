@@ -17,6 +17,7 @@ export default function Home() {
   const [username, setUsername] = useState("");
   const [isJoined, setIsJoined] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [users, setUsers] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -35,6 +36,10 @@ export default function Home() {
 
     socket.on("connect", () => {
       console.log("Connected to server");
+    });
+
+    socket.on("update_users", (activeUsers: string[]) => {
+      setUsers(activeUsers);
     });
 
     socket.on("load_history", (history: Message[]) => {
@@ -97,47 +102,71 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Chat Interface */}
-        <div className="chat-header">
-          <div className="chat-title">Global Room</div>
-          <div className="status-indicator" title="Online"></div>
-        </div>
-
-        <div className="messages-area">
-          {messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`message ${msg.isSystem ? "system" : msg.sender === username ? "self" : "other"
-                }`}
-            >
-              {!msg.isSystem && msg.sender !== username && (
-                <div className="message-sender">{msg.sender}</div>
-              )}
-              <div className="message-content">{msg.text}</div>
-              {!msg.isSystem && (
-                <div className="message-time">
-                  {new Date(msg.timestamp).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              )}
+        {/* Main Content Area */}
+        <div className="main-content">
+          {/* Sidebar */}
+          <div className="sidebar">
+            <div className="sidebar-header">
+              <h2>Online Users ({users.length})</h2>
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
+            <div className="user-list">
+              {users.map((user, idx) => (
+                <div key={idx} className={`user-item ${user === username ? 'me' : ''}`}>
+                  <div className="user-avatar">{user.charAt(0).toUpperCase()}</div>
+                  <div className="user-name">
+                    {user} {user === username && "(You)"}
+                  </div>
+                  <div className="user-status"></div>
+                </div>
+              ))}
+              {users.length === 0 && <div className="no-users">Waiting for others...</div>}
+            </div>
+          </div>
 
-        <form className="input-area" onSubmit={handleSendMessage}>
-          <input
-            type="text"
-            placeholder="Type a message..."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-          />
-          <button type="submit" className="send-btn">
-            ➤
-          </button>
-        </form>
+          {/* Chat Room */}
+          <div className="chat-room">
+            <div className="chat-header">
+              <div className="chat-title">Global Room</div>
+              <div className="status-indicator" title="Online"></div>
+            </div>
+
+            <div className="messages-area">
+              {messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`message ${msg.isSystem ? "system" : msg.sender === username ? "self" : "other"
+                    }`}
+                >
+                  {!msg.isSystem && msg.sender !== username && (
+                    <div className="message-sender">{msg.sender}</div>
+                  )}
+                  <div className="message-content">{msg.text}</div>
+                  {!msg.isSystem && (
+                    <div className="message-time">
+                      {new Date(msg.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <form className="input-area" onSubmit={handleSendMessage}>
+              <input
+                type="text"
+                placeholder="Type a message..."
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+              />
+              <button type="submit" className="send-btn">
+                ➤
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </main>
   );
