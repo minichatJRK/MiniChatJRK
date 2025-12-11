@@ -11,10 +11,56 @@ const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 // In-memory message storage (reset when server restarts)
-const messages = [];
+let messages = [];
 const MAX_HISTORY = 100;
 
-app.prepare().then(() => {
+// JSONBin Config
+// Note: Using keys provided by user. For production, please use environment variables.
+const BIN_ID = process.env.JSONBIN_BIN_ID || "693a1e6c43b1c97be9e5a4f5";
+const API_KEY = process.env.JSONBIN_API_KEY || "$2a$10$bsyh01U9/tssWDUyUoBwDuzrhjfiSbWBGg6ttDxKYgGbv5exHjrNK";
+
+// Helper: Load from Cloud
+async function loadHistory() {
+    if (!BIN_ID || !API_KEY) {
+        console.log("⚠️ JSONBin keys not found. Using in-memory only.");
+        return;
+    }
+    try {
+        const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+            headers: { 'X-Master-Key': API_KEY }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            // JSONBin returns data wrapped in "record" object
+            messages = Array.isArray(data.record) ? data.record : [];
+            console.log(`✅ Loaded ${messages.length} messages from JSONBin.`);
+        } else {
+            console.error("❌ Failed to load from JSONBin:", res.statusText);
+        }
+    } catch (err) {
+        console.error("❌ Error loading history:", err.message);
+    }
+}
+
+// Helper: Save to Cloud (Fire & Forget)
+async function saveHistory() {
+    if (!BIN_ID || !API_KEY) return;
+
+    // Simple fire-and-forget save
+    fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': API_KEY
+        },
+        body: JSON.stringify(messages)
+    }).catch(err => console.error("Error saving to JSONBin:", err.message));
+}
+
+app.prepare().then(async () => {
+    // Load history before starting server
+    await loadHistory();
+
     const httpServer = createServer(async (req, res) => {
         try {
             const parsedUrl = parse(req.url, true);
@@ -70,6 +116,8 @@ app.prepare().then(() => {
             messages.push(joinMsg);
             if (messages.length > MAX_HISTORY) messages.shift();
 
+            saveHistory(); // Async save
+
             io.emit("system_message", joinMsg);
         });
 
@@ -85,6 +133,8 @@ app.prepare().then(() => {
             // Store locally
             messages.push(messagePayload);
             if (messages.length > MAX_HISTORY) messages.shift();
+
+            saveHistory(); // Async save
 
             io.emit("receive_message", messagePayload);
         });
@@ -107,6 +157,8 @@ app.prepare().then(() => {
 
                 // Update user list
                 broadcastUsers();
+
+                saveHistory(); // Async save
             }
         });
     });
